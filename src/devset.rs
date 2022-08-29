@@ -17,10 +17,14 @@ fn get_last_error() -> DWORD {
 }
 
 pub struct DevInterfaceSet {
+    /// Handle to the device interface set
     handle: HDEVINFO,
+    /// Marker to tell rustc that this struct doesn't implement [`Send`]
+    _marker: PhantomData<*const ()>,
 }
 
 impl DevInterfaceSet {
+    // TODO: docs
     fn fetch(additional_flags: DWORD) -> Result<Self, DWORD> {
         // SAFETY: NULL is allowed for all the parameters
         // https://docs.microsoft.com/en-gb/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw?redirectedfrom=MSDN#parameters
@@ -33,8 +37,10 @@ impl DevInterfaceSet {
             )
         };
         (handle != INVALID_HANDLE_VALUE)
-            .then(|| Self { handle })
-            // SAFETY: how can this be unsafe?
+            .then(|| Self {
+                handle,
+                _marker: PhantomData,
+            })
             .ok_or_else(get_last_error)
     }
 
@@ -352,12 +358,14 @@ impl DevInterfaceData<'_> {
         let u64conv = |v: &[u8]| u64::from_ne_bytes(v[0..8].try_into().unwrap());
         let f32conv = |v: &[u8]| f32::from_ne_bytes(v[0..4].try_into().unwrap());
         let f64conv = |v: &[u8]| f64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let guidconv = |v: &[u8]| GuidWrap(GUID {
-            Data1: u32conv(&v[0..4]),
-            Data2: u16conv(&v[4..6]),
-            Data3: u16conv(&v[6..8]),
-            Data4: v[8..16].try_into().unwrap(),
-        });
+        let guidconv = |v: &[u8]| {
+            GuidWrap(GUID {
+                Data1: u32conv(&v[0..4]),
+                Data2: u16conv(&v[4..6]),
+                Data3: u16conv(&v[6..8]),
+                Data4: v[8..16].try_into().unwrap(),
+            })
+        };
 
         fn arrconv<T>(arr: &[u8], f: impl Fn(&[u8]) -> T) -> Vec<T> {
             arr.chunks_exact(std::mem::size_of::<T>() / 8)

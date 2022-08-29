@@ -25,10 +25,10 @@ fn main() {
             let default = data.is_default().then(|| "#").unwrap_or(" ");
             let removed = data.is_removed().then(|| "!").unwrap_or(" ");
 
-            match data.fetch_property_value(DEVPKEY_Storage_Removable_Media) {
-                Ok(DevProperty::Bool(true)) => (),
-                _ => continue,
-            }
+            // match data.fetch_property_value(DEVPKEY_Storage_Removable_Media) {
+            //     Ok(DevProperty::Bool(true)) => (),
+            //     _ => continue,
+            // }
 
             // match data.fetch_property_value(DEVPKEY_Storage_System_Critical) {
             //     Ok(DevProperty::Bool(true)) => (),
