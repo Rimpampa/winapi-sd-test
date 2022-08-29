@@ -6,9 +6,10 @@ use std::ptr::{null, null_mut};
 
 use winapi::shared::devpropdef::*;
 use winapi::shared::ntdef::{FALSE, TRUE};
-use winapi::shared::winerror::{ERROR_INSUFFICIENT_BUFFER, ERROR_NO_MORE_ITEMS};
 use winapi::shared::{guiddef::*, minwindef::DWORD};
-use winapi::um::{errhandlingapi::*, handleapi::*, setupapi::*};
+use winapi::um::{handleapi::*, setupapi::*};
+
+use crate::win;
 
 pub struct DevInterfaceSet {
     /// Handle to the device interface set
@@ -18,7 +19,7 @@ pub struct DevInterfaceSet {
 }
 
 impl DevInterfaceSet {
-    fn fetch(additional_flags: DWORD) -> Result<Self, DWORD> {
+    fn fetch(additional_flags: DWORD) -> win::Result<Self> {
         // SAFETY: NULL is allowed for all the parameters
         // https://docs.microsoft.com/en-gb/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw?redirectedfrom=MSDN#parameters
         let handle = unsafe {
@@ -30,8 +31,7 @@ impl DevInterfaceSet {
             )
         };
         if handle == INVALID_HANDLE_VALUE {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(win::Error::get());
         }
         Ok(Self {
             handle,
@@ -41,30 +41,31 @@ impl DevInterfaceSet {
 
     /// Creates a new device set containing all the device interface classes currently present
     // TODO: expand
-    pub fn fetch_present() -> Result<Self, DWORD> {
+    pub fn fetch_present() -> win::Result<Self> {
         Self::fetch(DIGCF_PRESENT)
     }
 
     /// Creates a new device set containing all the device interface classes
     // TODO: expand
-    pub fn fetch_all() -> Result<Self, DWORD> {
+    pub fn fetch_all() -> win::Result<Self> {
         Self::fetch(0)
     }
 
     /// Returns an iterator over all the data of the device interfaces listed in the set
     ///
     /// The GUID parameter filters which device interface class will be included
-    pub fn enumerate(
-        &self,
-        guid: GUID,
-    ) -> impl Iterator<Item = Result<DevInterfaceData<'_>, DWORD>> {
+    pub fn enumerate(&self, guid: GUID) -> impl Iterator<Item = win::Result<DevInterfaceData<'_>>> {
         iter::zip(0.., iter::repeat(DevInterfaceData::raw_zeroed())).map_while(
             move |(i, mut data)| {
                 unsafe { SetupDiEnumDeviceInterfaces(self.handle, null_mut(), &guid, i, &mut data) }
                     .eq(&TRUE.into())
                     .then(|| Some(unsafe { DevInterfaceData::from_raw(self, data) }))
-                    .ok_or_else(|| unsafe { GetLastError() })
-                    .or_else(|err| (err == ERROR_NO_MORE_ITEMS).then_some(None).ok_or(err))
+                    .ok_or_else(win::Error::get)
+                    .or_else(|err| {
+                        (err == win::Error::NO_MORE_ITEMS)
+                            .then_some(None)
+                            .ok_or(err)
+                    })
                     .transpose()
             },
         )
@@ -146,7 +147,7 @@ impl DevInterfaceData<'_> {
     }
 
     /// Returns the path of the device interface described by this data instance
-    pub fn fetch_path(&self) -> Result<Vec<u8>, DWORD> {
+    pub fn fetch_path(&self) -> win::Result<Vec<u8>> {
         let mut raw_size = 0;
 
         // SAFETY:
@@ -171,10 +172,9 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
-            ERROR_INSUFFICIENT_BUFFER => (), // Ok
-            err => return Err(err),
+        match win::Error::get() {
+            win::Error::INSUFFICIENT_BUFFER => (), // Ok
+            e => return Err(e),
         }
 
         let raw_usize = raw_size.try_into().unwrap();
@@ -216,8 +216,7 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(win::Error::get());
         }
         // NOTE: from now on details can't be accessed, this is why the raw buffer can be modified
         //       without taking care of the struct layout
@@ -227,7 +226,7 @@ impl DevInterfaceData<'_> {
         Ok(raw)
     }
 
-    pub fn fetch_property_keys(&self) -> Result<Vec<DEVPROPKEY>, DWORD> {
+    pub fn fetch_property_keys(&self) -> win::Result<Vec<DEVPROPKEY>> {
         let mut size = 0;
 
         // SAFETY:
@@ -251,10 +250,9 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
-            ERROR_INSUFFICIENT_BUFFER => (), // Ok
-            err => return Err(err),
+        match win::Error::get() {
+            win::Error::INSUFFICIENT_BUFFER => (), // Ok
+            e => return Err(e),
         }
 
         // SAFETY: the DEVPROPKEY struct can be zero initialized
@@ -279,13 +277,12 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(win::Error::get());
         }
         Ok(properties)
     }
 
-    pub fn fetch_property_value(&self, property: DEVPROPKEY) -> Result<DevProperty, DWORD> {
+    pub fn fetch_property_value(&self, property: DEVPROPKEY) -> win::Result<DevProperty> {
         let mut prop_ty = 0;
         let mut size = 0;
 
@@ -314,12 +311,10 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
-            ERROR_INSUFFICIENT_BUFFER => (), // Ok
-            err => return Err(err),
+        match win::Error::get() {
+            win::Error::INSUFFICIENT_BUFFER => (), // Ok
+            e => return Err(e),
         }
-
         let mut raw = vec![0u8; size as usize];
 
         // SAFETY:
@@ -345,8 +340,7 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(win::Error::get());
         }
 
         use DevProperty as P;
