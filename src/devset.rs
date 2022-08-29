@@ -10,6 +10,12 @@ use winapi::shared::winerror::{ERROR_INSUFFICIENT_BUFFER, ERROR_NO_MORE_ITEMS};
 use winapi::shared::{guiddef::*, minwindef::DWORD};
 use winapi::um::{errhandlingapi::*, handleapi::*, setupapi::*};
 
+/// Wrapper around [`GetLastError`]
+fn get_last_error() -> DWORD {
+    // SAFETY: how can this be unsafe?
+    unsafe { GetLastError() }
+}
+
 pub struct DevInterfaceSet {
     handle: HDEVINFO,
 }
@@ -29,7 +35,7 @@ impl DevInterfaceSet {
         (handle != INVALID_HANDLE_VALUE)
             .then(|| Self { handle })
             // SAFETY: how can this be unsafe?
-            .ok_or_else(|| unsafe { GetLastError() })
+            .ok_or_else(get_last_error)
     }
 
     /// Creates a new device set containing all the device interface classes currently present
@@ -56,7 +62,7 @@ impl DevInterfaceSet {
                 unsafe { SetupDiEnumDeviceInterfaces(self.handle, null_mut(), &guid, i, &mut data) }
                     .eq(&TRUE.into())
                     .then(|| Some(unsafe { DevInterfaceData::from_raw(self, data) }))
-                    .ok_or_else(|| unsafe { GetLastError() })
+                    .ok_or_else(get_last_error)
                     .or_else(|err| (err == ERROR_NO_MORE_ITEMS).then(|| None).ok_or(err))
                     .transpose()
             },
@@ -164,8 +170,7 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
+        match get_last_error() {
             ERROR_INSUFFICIENT_BUFFER => (), // Ok
             err => return Err(err),
         }
@@ -209,8 +214,7 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(get_last_error());
         }
         // NOTE: from now on details can't be accessed, this is why the raw buffer can be modified
         //       without taking care of the struct layout
@@ -244,8 +248,7 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
+        match get_last_error() {
             ERROR_INSUFFICIENT_BUFFER => (), // Ok
             err => return Err(err),
         }
@@ -272,8 +275,7 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(get_last_error());
         }
         Ok(properties)
     }
@@ -307,8 +309,7 @@ impl DevInterfaceData<'_> {
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
         assert_eq!(result, FALSE.into());
-        // SAFETY: how can this be unsafe?
-        match unsafe { GetLastError() } {
+        match get_last_error() {
             ERROR_INSUFFICIENT_BUFFER => (), // Ok
             err => return Err(err),
         }
@@ -338,8 +339,7 @@ impl DevInterfaceData<'_> {
             )
         };
         if result != TRUE.into() {
-            // SAFETY: how can this be unsafe?
-            return Err(unsafe { GetLastError() });
+            return Err(get_last_error());
         }
 
         use DevProperty as P;
