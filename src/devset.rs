@@ -11,7 +11,10 @@ use winapi::shared::{guiddef::*, minwindef::DWORD};
 use winapi::um::{errhandlingapi::*, handleapi::*, setupapi::*};
 
 pub struct DevInterfaceSet {
+    /// Handle to the device interface set
     handle: HDEVINFO,
+    /// Marker to tell rustc that this struct doesn't implement [`Send`]
+    _marker: PhantomData<*const ()>,
 }
 
 impl DevInterfaceSet {
@@ -30,7 +33,10 @@ impl DevInterfaceSet {
             // SAFETY: how can this be unsafe?
             return Err(unsafe { GetLastError() });
         }
-        Ok(Self { handle })
+        Ok(Self {
+            handle,
+            _marker: PhantomData,
+        })
     }
 
     /// Creates a new device set containing all the device interface classes currently present
