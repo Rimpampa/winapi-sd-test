@@ -3,13 +3,10 @@ use winapi::shared::devpropdef::*;
 use winapi::shared::guiddef::GUID;
 use winapi::um::winioctl::*;
 
-mod devset;
 use devset::DevInterfaceSet;
-
-use crate::devset::DevProperty;
-use crate::devset::GuidWrap;
-
-mod devprop;
+use devset::DevProperty;
+use devset::GuidWrap;
+use sd_formatter::devset;
 
 fn main() {
     let devset = DevInterfaceSet::fetch_present().unwrap();
@@ -21,9 +18,9 @@ fn main() {
             let utf16 = unsafe { path.align_to::<u16>() }.1;
             let path = String::from_utf16(utf16).unwrap();
 
-            let active = data.is_active().then(|| "+").unwrap_or("-");
-            let default = data.is_default().then(|| "#").unwrap_or(" ");
-            let removed = data.is_removed().then(|| "!").unwrap_or(" ");
+            let active = if data.is_active() { "+" } else { "-" };
+            let default = if data.is_default() { "#" } else { " " };
+            let removed = if data.is_removed() { "!" } else { " " };
 
             match data.fetch_property_value(DEVPKEY_Storage_Removable_Media) {
                 Ok(DevProperty::Bool(true)) => (),
@@ -40,7 +37,7 @@ fn main() {
             for prop in data.fetch_property_keys().unwrap() {
                 let name = DEVPKEYS
                     .into_iter()
-                    .find_map(|(name, key)| IsEqualDevPropKey(&key, &prop).then(|| name));
+                    .find_map(|(name, key)| IsEqualDevPropKey(&key, &prop).then_some(name));
                 let val = data.fetch_property_value(prop).unwrap();
                 match name {
                     Some(name) => println!("    PROP: {name} = {val}"),

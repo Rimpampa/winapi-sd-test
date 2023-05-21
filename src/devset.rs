@@ -26,10 +26,11 @@ impl DevInterfaceSet {
                 DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE | additional_flags,
             )
         };
-        (handle != INVALID_HANDLE_VALUE)
-            .then(|| Self { handle })
+        if handle == INVALID_HANDLE_VALUE {
             // SAFETY: how can this be unsafe?
-            .ok_or_else(|| unsafe { GetLastError() })
+            return Err(unsafe { GetLastError() });
+        }
+        Ok(Self { handle })
     }
 
     /// Creates a new device set containing all the device interface classes currently present
@@ -57,7 +58,7 @@ impl DevInterfaceSet {
                     .eq(&TRUE.into())
                     .then(|| Some(unsafe { DevInterfaceData::from_raw(self, data) }))
                     .ok_or_else(|| unsafe { GetLastError() })
-                    .or_else(|err| (err == ERROR_NO_MORE_ITEMS).then(|| None).ok_or(err))
+                    .or_else(|err| (err == ERROR_NO_MORE_ITEMS).then_some(None).ok_or(err))
                     .transpose()
             },
         )
@@ -352,12 +353,14 @@ impl DevInterfaceData<'_> {
         let u64conv = |v: &[u8]| u64::from_ne_bytes(v[0..8].try_into().unwrap());
         let f32conv = |v: &[u8]| f32::from_ne_bytes(v[0..4].try_into().unwrap());
         let f64conv = |v: &[u8]| f64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let guidconv = |v: &[u8]| GuidWrap(GUID {
-            Data1: u32conv(&v[0..4]),
-            Data2: u16conv(&v[4..6]),
-            Data3: u16conv(&v[6..8]),
-            Data4: v[8..16].try_into().unwrap(),
-        });
+        let guidconv = |v: &[u8]| {
+            GuidWrap(GUID {
+                Data1: u32conv(&v[0..4]),
+                Data2: u16conv(&v[4..6]),
+                Data3: u16conv(&v[6..8]),
+                Data4: v[8..16].try_into().unwrap(),
+            })
+        };
 
         fn arrconv<T>(arr: &[u8], f: impl Fn(&[u8]) -> T) -> Vec<T> {
             arr.chunks_exact(std::mem::size_of::<T>() / 8)
