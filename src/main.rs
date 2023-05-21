@@ -3,16 +3,16 @@ use winapi::shared::devpropdef::*;
 use winapi::shared::guiddef::GUID;
 use winapi::um::winioctl::*;
 
+use devprop::DevProperty;
 use devset::DevInterfaceSet;
-use devset::DevProperty;
-use devset::GuidWrap;
+use sd_formatter::devprop;
 use sd_formatter::devset;
 
 fn main() {
     let devset = DevInterfaceSet::fetch_present().unwrap();
 
     for (name, guid) in GUIDS {
-        println!("GUID: [{}] {name}", GuidWrap(guid));
+        println!("GUID: [{}] {name}", DevProperty::Guid(guid));
         for data in devset.enumerate(guid).map(Result::unwrap) {
             let path = data.fetch_path().unwrap();
             let utf16 = unsafe { path.align_to::<u16>() }.1;
@@ -41,7 +41,11 @@ fn main() {
                 let val = data.fetch_property_value(prop).unwrap();
                 match name {
                     Some(name) => println!("    PROP: {name} = {val}"),
-                    None => println!("    PROP: {}::{} = {val}", GuidWrap(prop.fmtid), prop.pid),
+                    None => println!(
+                        "    PROP: {}::{} = {val}",
+                        DevProperty::Guid(prop.fmtid),
+                        prop.pid
+                    ),
                 }
             }
         }

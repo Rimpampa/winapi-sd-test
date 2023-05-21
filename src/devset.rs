@@ -9,6 +9,7 @@ use winapi::shared::ntdef::{FALSE, TRUE};
 use winapi::shared::{guiddef::*, minwindef::DWORD};
 use winapi::um::{handleapi::*, setupapi::*};
 
+use crate::devprop::DevProperty;
 use crate::win;
 
 pub struct DevInterfaceSet {
@@ -353,13 +354,11 @@ impl DevInterfaceData<'_> {
         let u64conv = |v: &[u8]| u64::from_ne_bytes(v[0..8].try_into().unwrap());
         let f32conv = |v: &[u8]| f32::from_ne_bytes(v[0..4].try_into().unwrap());
         let f64conv = |v: &[u8]| f64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let guidconv = |v: &[u8]| {
-            GuidWrap(GUID {
-                Data1: u32conv(&v[0..4]),
-                Data2: u16conv(&v[4..6]),
-                Data3: u16conv(&v[6..8]),
-                Data4: v[8..16].try_into().unwrap(),
-            })
+        let guidconv = |v: &[u8]| GUID {
+            Data1: u32conv(&v[0..4]),
+            Data2: u16conv(&v[4..6]),
+            Data3: u16conv(&v[6..8]),
+            Data4: v[8..16].try_into().unwrap(),
         };
 
         fn arrconv<T>(arr: &[u8], f: impl Fn(&[u8]) -> T) -> Vec<T> {
@@ -408,103 +407,6 @@ impl DevInterfaceData<'_> {
                 (ARR, DEVPROP_TYPE_GUID) => P::GuidArray(arrconv(&raw, guidconv)),
                 _ => DevProperty::Unsupported(prop_ty),
             },
-        )
-    }
-}
-
-#[derive(Debug)]
-pub enum DevProperty {
-    Empty,
-    Null,
-    Bool(bool),
-    BoolArray(Vec<bool>),
-    String(String),
-    I8(i8),
-    I8Array(Vec<i8>),
-    U8(u8),
-    U8Array(Vec<u8>),
-    I16(i16),
-    I16Array(Vec<i16>),
-    U16(u16),
-    U16Array(Vec<u16>),
-    I32(i32),
-    I32Array(Vec<i32>),
-    U32(u32),
-    U32Array(Vec<u32>),
-    I64(i64),
-    I64Array(Vec<i64>),
-    U64(u64),
-    U64Array(Vec<u64>),
-    F32(f32),
-    F32Array(Vec<f32>),
-    F64(f64),
-    F64Array(Vec<f64>),
-    Binary(Vec<u8>),
-    Guid(GuidWrap),
-    GuidArray(Vec<GuidWrap>),
-    Unsupported(DEVPROPTYPE),
-}
-
-impl std::fmt::Display for DevProperty {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DevProperty::Empty => write!(f, "#EMPTY"),
-            DevProperty::Null => write!(f, "#NULL"),
-            DevProperty::Bool(v) => write!(f, "{v}"),
-            DevProperty::BoolArray(v) => write!(f, "{v:?}"),
-            DevProperty::String(v) => write!(f, "{v}"),
-            DevProperty::I8(v) => write!(f, "{v}"),
-            DevProperty::I8Array(v) => write!(f, "{v:?}"),
-            DevProperty::U8(v) => write!(f, "{v}"),
-            DevProperty::U8Array(v) => write!(f, "{v:?}"),
-            DevProperty::I16(v) => write!(f, "{v}"),
-            DevProperty::I16Array(v) => write!(f, "{v:?}"),
-            DevProperty::U16(v) => write!(f, "{v}"),
-            DevProperty::U16Array(v) => write!(f, "{v:?}"),
-            DevProperty::I32(v) => write!(f, "{v}"),
-            DevProperty::I32Array(v) => write!(f, "{v:?}"),
-            DevProperty::U32(v) => write!(f, "{v}"),
-            DevProperty::U32Array(v) => write!(f, "{v:?}"),
-            DevProperty::I64(v) => write!(f, "{v}"),
-            DevProperty::I64Array(v) => write!(f, "{v:?}"),
-            DevProperty::U64(v) => write!(f, "{v}"),
-            DevProperty::U64Array(v) => write!(f, "{v:?}"),
-            DevProperty::F32(v) => write!(f, "{v}"),
-            DevProperty::F32Array(v) => write!(f, "{v:?}"),
-            DevProperty::F64(v) => write!(f, "{v}"),
-            DevProperty::F64Array(v) => write!(f, "{v:?}"),
-            DevProperty::Binary(v) => v.iter().try_for_each(|v| write!(f, "{v:02x}")),
-            DevProperty::Guid(v) => write!(f, "{v}"),
-            DevProperty::GuidArray(v) => write!(f, "{v:?}"),
-            DevProperty::Unsupported(v) => write!(f, "#UNSUP{{{v}}}"),
-        }
-    }
-}
-
-pub struct GuidWrap(pub GUID);
-
-impl std::fmt::Debug for GuidWrap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Guid")
-            .field("Data1", &self.0.Data1)
-            .field("Data2", &self.0.Data2)
-            .field("Data3", &self.0.Data3)
-            .field("Data4", &self.0.Data4)
-            .finish()
-    }
-}
-
-impl std::fmt::Display for GuidWrap {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let GUID {
-            Data1: a,
-            Data2: b,
-            Data3: c,
-            Data4: [d, e, f, g, h, i, j, k],
-        } = self.0;
-        write!(
-            fmt,
-            "{a:08x}-{b:04x}-{c:04x}-{d:02x}{e:02x}-{f:02x}{g:02x}{h:02x}{i:02x}{j:02x}{k:02x}"
         )
     }
 }
