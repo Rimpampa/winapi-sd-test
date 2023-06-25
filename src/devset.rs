@@ -1,5 +1,4 @@
 use core::marker::PhantomData;
-use core::ops::Deref;
 use core::ptr::{null, null_mut};
 
 use winapi::shared::{guiddef::*, minwindef::DWORD};
@@ -57,13 +56,5 @@ impl Drop for DevInterfaceSet {
         // SAFETY: the pointers is the same returned by `SetupDiGetClassDevsW` and it must be deleted like this according to the remarks
         // https://docs.microsoft.com/en-gb/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw?redirectedfrom=MSDN#remarks
         unsafe { SetupDiDestroyDeviceInfoList(self.handle) };
-    }
-}
-
-impl Deref for DevInterfaceSet {
-    type Target = HDEVINFO;
-
-    fn deref(&self) -> &Self::Target {
-        &self.handle
     }
 }
