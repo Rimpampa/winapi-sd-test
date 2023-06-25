@@ -13,7 +13,7 @@ fn main() {
 
     for (name, guid) in GUIDS {
         println!("GUID: [{}] {name}", DevProperty::Guid(guid));
-        for data in devset.enumerate(guid).map(Result::unwrap) {
+        for data in devset.enumerate(&guid).map(Result::unwrap) {
             let path = data.fetch_path().unwrap();
             let utf16 = unsafe { path.align_to::<u16>() }.1;
             let path = String::from_utf16(utf16).unwrap();

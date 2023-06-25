@@ -1,14 +1,15 @@
-use std::marker::PhantomData;
-use std::mem::{size_of, size_of_val, zeroed};
-use std::ptr::null_mut;
+use core::marker::PhantomData;
+use core::mem::{size_of, size_of_val, zeroed, MaybeUninit};
+use core::ptr::{addr_of_mut, null_mut};
 
 use winapi::shared::devpropdef::*;
 use winapi::shared::guiddef::*;
-use winapi::shared::ntdef::{FALSE, TRUE};
+use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::um::setupapi::*;
 
 use crate::devprop::DevProperty;
-use crate::{devset::DevInterfaceSet, win};
+use crate::devset::DevInterfaceSet;
+use crate::win;
 
 /// A wrapper around the [`SP_DEVICE_INTERFACE_DATA`] struct from the [`winapi`]
 ///
@@ -23,32 +24,60 @@ pub struct DevInterfaceData<'a> {
     handle: HDEVINFO,
     /// The data returned by the [`SetupDiEnumDeviceInterfaces`] function
     data: SP_DEVICE_INTERFACE_DATA,
-    /// A ghost reference to the device set wrapper, to take advantage of the borrow checker
+    /// Ghost reference to the [`DevInterfaceSet`] from which this data
+    /// was fetched
+    ///
+    /// This is needed because it binds the lifetime of a value of this type
+    /// to the lifetime of the [`DevInterfaceSet`] from which the `handle`
+    /// was taken from
     _marker: PhantomData<&'a DevInterfaceSet>,
 }
 
-impl DevInterfaceData<'_> {
-    /// Returns a [`zeroed`] value of the [`SP_DEVICE_INTERFACE_DATA`] type
+impl<'a> DevInterfaceData<'a> {
+    /// Retrieves the data of the device interface with the given [`GUID`]
     ///
-    /// This function also intializes the `cbSize` field with the correct size
-    pub(crate) fn raw_zeroed() -> SP_DEVICE_INTERFACE_DATA {
-        SP_DEVICE_INTERFACE_DATA {
-            cbSize: size_of::<SP_DEVICE_INTERFACE_DATA>().try_into().unwrap(),
-            // SAFETY: this struct can be zero initialized
-            ..unsafe { zeroed() }
-        }
-    }
+    /// The GUID parameter filters which device interface class will be included
+    pub fn fetch(set: &'a DevInterfaceSet, index: u32, guid: &GUID) -> win::Result<Option<Self>> {
+        use SP_DEVICE_INTERFACE_DATA as Data;
+        const SIZE: u32 = size_of::<Data>() as u32;
 
-    /// Constructs a new wrapper around the given values
-    ///
-    /// # Safety
-    ///
-    /// The values must comply to the invariants of the wrapper: [`Self`]
-    pub(crate) unsafe fn from_raw(set: &DevInterfaceSet, data: SP_DEVICE_INTERFACE_DATA) -> Self {
-        Self {
-            handle: set.handle,
-            data,
-            _marker: PhantomData,
+        let mut data = MaybeUninit::<Data>::uninit();
+        // NOTE: This is required by `SetupDiEnumDeviceInterfaces`
+        // SAFETY: thanks to `addr_of_mut!` no reference to uninitialized data is created
+        unsafe { addr_of_mut!((*data.as_mut_ptr()).cbSize).write(SIZE) };
+
+        // SAFETY:
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdienumdeviceinterfaces#parameters
+        // - `DeviceInfoSet = set.handle` is assured to be valid by the invariants of `DevInterfaceSet`
+        // - `[optional] DeviceInfoData` can be null
+        // - `InterfaceClassGuid` is a valid pointer to a `GUID`
+        // - `[out] DeviceInterfaceData` is a valid pointer to an `SP_DEVICE_INTERFACE_DATA`,
+        //   also this has been done:
+        //   > The caller must set `DeviceInterfaceData.cbSize` to `sizeof(SP_DEVICE_INTERFACE_DATA)`
+        //   > before calling this function.
+        //   (the other fields can remain uninitialized)
+        let result = unsafe {
+            SetupDiEnumDeviceInterfaces(set.handle, null_mut(), guid, index, data.as_mut_ptr())
+        };
+        match result {
+            TRUE => Ok(Some(Self {
+                handle: set.handle,
+                // SAFETY:
+                // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdienumdeviceinterfaces#parameters
+                // in `[out] DeviceInterfaceData`:
+                // > A pointer to a caller-allocated buffer that contains, on successful return,
+                // > a completed SP_DEVICE_INTERFACE_DATA.
+                // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdienumdeviceinterfaces#return-value
+                // in **Return Value**:
+                // > SetupDiEnumDeviceInterfaces returns TRUE if the function completed without error.
+                // Here the return value is `TRUE` so it is ok to assume that the value is initialized
+                data: unsafe { data.assume_init() },
+                _marker: PhantomData,
+            })),
+            _ => match win::Error::get() {
+                win::Error::NO_MORE_ITEMS => Ok(None),
+                e => Err(e),
+            },
         }
     }
 
@@ -93,7 +122,7 @@ impl DevInterfaceData<'_> {
         };
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
-        assert_eq!(result, FALSE.into());
+        assert_eq!(result, FALSE);
         match win::Error::get() {
             win::Error::INSUFFICIENT_BUFFER => (), // Ok
             e => return Err(e),
@@ -137,7 +166,7 @@ impl DevInterfaceData<'_> {
                 null_mut(),
             )
         };
-        if result != TRUE.into() {
+        if result != TRUE {
             return Err(win::Error::get());
         }
         // NOTE: from now on details can't be accessed, this is why the raw buffer can be modified
@@ -171,7 +200,7 @@ impl DevInterfaceData<'_> {
         };
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
-        assert_eq!(result, FALSE.into());
+        assert_eq!(result, FALSE);
         match win::Error::get() {
             win::Error::INSUFFICIENT_BUFFER => (), // Ok
             e => return Err(e),
@@ -198,7 +227,7 @@ impl DevInterfaceData<'_> {
                 0,
             )
         };
-        if result != TRUE.into() {
+        if result != TRUE {
             return Err(win::Error::get());
         }
         Ok(properties)
@@ -232,7 +261,7 @@ impl DevInterfaceData<'_> {
         };
         // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
         //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
-        assert_eq!(result, FALSE.into());
+        assert_eq!(result, FALSE);
         match win::Error::get() {
             win::Error::INSUFFICIENT_BUFFER => (), // Ok
             e => return Err(e),
@@ -261,7 +290,7 @@ impl DevInterfaceData<'_> {
                 0,
             )
         };
-        if result != TRUE.into() {
+        if result != TRUE {
             return Err(win::Error::get());
         }
 

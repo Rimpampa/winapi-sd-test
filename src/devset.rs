@@ -1,9 +1,7 @@
-use std::iter;
-use std::marker::PhantomData;
-use std::ops::Deref;
-use std::ptr::{null, null_mut};
+use core::marker::PhantomData;
+use core::ops::Deref;
+use core::ptr::{null, null_mut};
 
-use winapi::shared::ntdef::TRUE;
 use winapi::shared::{guiddef::*, minwindef::DWORD};
 use winapi::um::{handleapi::*, setupapi::*};
 
@@ -17,7 +15,7 @@ pub struct DevInterfaceSet {
 }
 
 impl DevInterfaceSet {
-    fn fetch(additional_flags: DWORD) -> win::Result<Self> {
+    fn fetch_all(additional_flags: DWORD) -> win::Result<Self> {
         // SAFETY: NULL is allowed for all the parameters
         // https://docs.microsoft.com/en-gb/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw?redirectedfrom=MSDN#parameters
         let handle = unsafe {
@@ -40,33 +38,17 @@ impl DevInterfaceSet {
     /// Creates a new device set containing all the device interface classes currently present
     // TODO: expand
     pub fn fetch_present() -> win::Result<Self> {
-        Self::fetch(DIGCF_PRESENT)
-    }
-
-    /// Creates a new device set containing all the device interface classes
-    // TODO: expand
-    pub fn fetch_all() -> win::Result<Self> {
-        Self::fetch(0)
+        Self::fetch_all(DIGCF_PRESENT)
     }
 
     /// Returns an iterator over all the data of the device interfaces listed in the set
     ///
     /// The GUID parameter filters which device interface class will be included
-    pub fn enumerate(&self, guid: GUID) -> impl Iterator<Item = win::Result<DevInterfaceData<'_>>> {
-        iter::zip(0.., iter::repeat(DevInterfaceData::raw_zeroed())).map_while(
-            move |(i, mut data)| {
-                unsafe { SetupDiEnumDeviceInterfaces(self.handle, null_mut(), &guid, i, &mut data) }
-                    .eq(&TRUE.into())
-                    .then(|| Some(unsafe { DevInterfaceData::from_raw(self, data) }))
-                    .ok_or_else(win::Error::get)
-                    .or_else(|err| {
-                        (err == win::Error::NO_MORE_ITEMS)
-                            .then_some(None)
-                            .ok_or(err)
-                    })
-                    .transpose()
-            },
-        )
+    pub fn enumerate<'a>(
+        &'a self,
+        guid: &'a GUID,
+    ) -> impl Iterator<Item = win::Result<DevInterfaceData<'a>>> {
+        (0..).map_while(|i| DevInterfaceData::fetch(self, i, guid).transpose())
     }
 }
 
