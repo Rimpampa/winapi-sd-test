@@ -10,9 +10,10 @@ use winapi::shared::guiddef::*;
 use winapi::shared::minwindef::{DWORD, FALSE, TRUE};
 use winapi::um::setupapi::*;
 
-use crate::devprop::DevProperty;
 use crate::devset::DevInterfaceSet;
 use crate::win;
+
+mod properties;
 
 /// A wrapper around the [`SP_DEVICE_INTERFACE_DATA`] struct from the [`winapi`]
 ///
@@ -295,132 +296,5 @@ impl<'a> DevInterfaceData<'a> {
         // `size` the exact amount of properties requested, it means that all the
         // values in `properties` where initialized.
         Ok(unsafe { properties.assume_init() })
-    }
-
-    pub fn fetch_property_value(&self, property: DEVPROPKEY) -> win::Result<DevProperty> {
-        let mut prop_ty = 0;
-        let mut size = 0;
-
-        // SAFETY:
-        // https://docs.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
-        // `DeviceInfoSet`: is a valid handle because of the invariants of Self
-        // `DeviceInterfaceData`: is correctly initialized because of the invariants of Self
-        // `PropertyKey`: any value is allowed (if the property is wrong an error is returned)
-        // `PropertyType`: a valid pointer to a `DEVPROPTYPE`
-        // `PropertyBuffer`: can be null if `PropertyBufferSize` is 0
-        // `PropertyBufferSize`: must be 0 if `PropertyBuffer` is null
-        // `RequiredSize`: is a valid pointer to a `DWORD`
-        // `Flags`: must be 0
-        let result = unsafe {
-            SetupDiGetDeviceInterfacePropertyW(
-                self.handle,
-                &mut SP_DEVICE_INTERFACE_DATA { ..self.data },
-                &property,
-                &mut prop_ty,
-                null_mut(),
-                0,
-                &mut size,
-                0,
-            )
-        };
-        // NOTE: this is expected to fail because of DeviceInterfaceDetailDataSize = 0
-        //       and, for the same reason, the error is expected to be `ERROR_INSUFFICIENT_BUFFER`
-        assert_eq!(result, FALSE);
-        match win::Error::get() {
-            win::Error::INSUFFICIENT_BUFFER => (), // Ok
-            e => return Err(e),
-        }
-        let mut raw = vec![0u8; size as usize];
-
-        // SAFETY:
-        // https://docs.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
-        // `DeviceInfoSet`: is a valid handle because of the invariants of Self
-        // `DeviceInterfaceData`: is correctly initialized because of the invariants of Self
-        // `PropertyKey`: any value is allowed (if the property is wrong an error is returned)
-        // `PropertyType`: a valid pointer to a `DEVPROPTYPE`
-        // `PropertyBuffer`: can be null if `PropertyBufferSize` is 0
-        // `PropertyBufferSize`: must be 0 if `PropertyBuffer` is null
-        // `RequiredSize`: is a valid pointer to a `DWORD`
-        // `Flags`: must be 0
-        let result = unsafe {
-            SetupDiGetDeviceInterfacePropertyW(
-                self.handle,
-                &mut SP_DEVICE_INTERFACE_DATA { ..self.data },
-                &property,
-                &mut prop_ty,
-                raw.as_mut_ptr(),
-                size,
-                null_mut(),
-                0,
-            )
-        };
-        if result != TRUE {
-            return Err(win::Error::get());
-        }
-
-        use DevProperty as P;
-
-        let i16conv = |v: &[u8]| i16::from_ne_bytes([v[0], v[1]]);
-        let u16conv = |v: &[u8]| u16::from_ne_bytes([v[0], v[1]]);
-        let i32conv = |v: &[u8]| i32::from_ne_bytes(v[0..4].try_into().unwrap());
-        let u32conv = |v: &[u8]| u32::from_ne_bytes(v[0..4].try_into().unwrap());
-        let i64conv = |v: &[u8]| i64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let u64conv = |v: &[u8]| u64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let f32conv = |v: &[u8]| f32::from_ne_bytes(v[0..4].try_into().unwrap());
-        let f64conv = |v: &[u8]| f64::from_ne_bytes(v[0..8].try_into().unwrap());
-        let guidconv = |v: &[u8]| GUID {
-            Data1: u32conv(&v[0..4]),
-            Data2: u16conv(&v[4..6]),
-            Data3: u16conv(&v[6..8]),
-            Data4: v[8..16].try_into().unwrap(),
-        };
-
-        fn arrconv<T>(arr: &[u8], f: impl Fn(&[u8]) -> T) -> Vec<T> {
-            arr.chunks_exact(std::mem::size_of::<T>() / 8)
-                .map(f)
-                .collect()
-        }
-
-        use DEVPROP_TYPEMOD_ARRAY as ARR;
-
-        Ok(
-            match (prop_ty & DEVPROP_MASK_TYPEMOD, prop_ty & DEVPROP_MASK_TYPE) {
-                (0, DEVPROP_TYPE_EMPTY) => P::Empty,
-                (0, DEVPROP_TYPE_NULL) => P::Null,
-                (0, DEVPROP_TYPE_BOOLEAN) => P::Bool(raw[0] as i8 == DEVPROP_TRUE),
-                (0, DEVPROP_TYPE_STRING) => P::String(
-                    // SAFETY: transmuting between plain data types doesn't cause any damage (if correctly aligned)
-                    String::from_utf16(unsafe { raw.align_to() }.1.split_last().unwrap().1)
-                        .unwrap(),
-                ),
-                (0, DEVPROP_TYPE_SBYTE) => P::I8(raw[0] as i8),
-                (0, DEVPROP_TYPE_BYTE) => P::U8(raw[0]),
-                (0, DEVPROP_TYPE_INT16) => P::I16(i16conv(&raw)),
-                (0, DEVPROP_TYPE_UINT16) => P::U16(u16conv(&raw)),
-                (0, DEVPROP_TYPE_INT32) => P::I32(i32conv(&raw)),
-                (0, DEVPROP_TYPE_UINT32) => P::U32(u32conv(&raw)),
-                (0, DEVPROP_TYPE_INT64) => P::I64(i64conv(&raw)),
-                (0, DEVPROP_TYPE_UINT64) => P::U64(u64conv(&raw)),
-                (0, DEVPROP_TYPE_FLOAT) => P::F32(f32conv(&raw)),
-                (0, DEVPROP_TYPE_DOUBLE) => P::F64(f64conv(&raw)),
-                (0, DEVPROP_TYPE_BINARY) => P::Binary(raw),
-                (0, DEVPROP_TYPE_GUID) => P::Guid(guidconv(&raw)),
-                (ARR, DEVPROP_TYPE_BOOLEAN) => {
-                    P::BoolArray(raw.into_iter().map(|v| v as i8 == DEVPROP_TRUE).collect())
-                }
-                (ARR, DEVPROP_TYPE_SBYTE) => P::I8Array(raw.into_iter().map(|v| v as i8).collect()),
-                (ARR, DEVPROP_TYPE_BYTE) => P::U8Array(raw),
-                (ARR, DEVPROP_TYPE_INT16) => P::I16Array(arrconv(&raw, i16conv)),
-                (ARR, DEVPROP_TYPE_UINT16) => P::U16Array(arrconv(&raw, u16conv)),
-                (ARR, DEVPROP_TYPE_INT32) => P::I32Array(arrconv(&raw, i32conv)),
-                (ARR, DEVPROP_TYPE_UINT32) => P::U32Array(arrconv(&raw, u32conv)),
-                (ARR, DEVPROP_TYPE_INT64) => P::I64Array(arrconv(&raw, i64conv)),
-                (ARR, DEVPROP_TYPE_UINT64) => P::U64Array(arrconv(&raw, u64conv)),
-                (ARR, DEVPROP_TYPE_FLOAT) => P::F32Array(arrconv(&raw, f32conv)),
-                (ARR, DEVPROP_TYPE_DOUBLE) => P::F64Array(arrconv(&raw, f64conv)),
-                (ARR, DEVPROP_TYPE_GUID) => P::GuidArray(arrconv(&raw, guidconv)),
-                _ => DevProperty::Unsupported(prop_ty),
-            },
-        )
     }
 }
