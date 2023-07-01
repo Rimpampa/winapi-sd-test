@@ -14,9 +14,7 @@ fn main() {
     for (name, guid) in GUIDS {
         println!("GUID: [{}] {name}", DevProperty::Guid(guid));
         for data in devset.enumerate(&guid).map(Result::unwrap) {
-            let path = data.fetch_path().unwrap();
-            let utf16 = unsafe { path.align_to::<u16>() }.1;
-            let path = String::from_utf16(utf16).unwrap();
+            let path = data.fetch_path().unwrap().to_utf8();
 
             let active = if data.is_active() { "+" } else { "-" };
             let default = if data.is_default() { "#" } else { " " };
@@ -34,7 +32,7 @@ fn main() {
 
             println!("{removed}{default}{active}PATH: {path}");
 
-            for prop in data.fetch_property_keys().unwrap() {
+            for prop in data.fetch_property_keys().unwrap().into_vec() {
                 let name = DEVPKEYS
                     .into_iter()
                     .find_map(|(name, key)| IsEqualDevPropKey(&key, &prop).then_some(name));
