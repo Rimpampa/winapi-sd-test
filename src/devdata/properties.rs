@@ -216,14 +216,14 @@ impl super::DevInterfaceData<'_> {
             e => return Err(e),
         }
         // SAFETY: it is safe to assume that `size` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] RequiredSize`
         // > [...] receives the size, in bytes, of [...] the required buffer size,
         // > if the buffer is not large enough
         // last phrase practically means: "if the generated error is `ERROR_INSUFFICIENT_BUFFER`"
         let size = unsafe { size.assume_init() };
         // SAFETY: it is safe to assume that `type` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] PropertyType`
         // > [...] receives the property-data-type identifier of the requested device interface property
         // There is no indication of when this value is not populated, but it can be assumed that
@@ -298,14 +298,14 @@ impl Property<'_> {
             return Err(win::Error::get());
         }
         // SAFETY: it is safe to assume that `size` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] RequiredSize`
         // > [...] receives the size, in bytes, of [...] the device interface property if the property is retrieved
         // last phrase practically means: "if the return type is `TRUE`"
         // NOTE: this check is important for the following unsafe operations
         assert_eq!(self.size, unsafe { size.assume_init() });
         // SAFETY: it is safe to assume that `type` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] PropertyType`
         // > A pointer to a DEVPROPTYPE-typed variable that receives the property-data-type identifier
         // > of the requested device interface property
@@ -363,14 +363,14 @@ impl Property<'_> {
             return Err(win::Error::get());
         }
         // SAFETY: it is safe to assume that `size` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] RequiredSize`
         // > [...] receives the size, in bytes, of [...] the device interface property if the property is retrieved
         // last phrase practically means: "if the return type is `TRUE`"
         // NOTE: this check is important for the following unsafe operations
         assert_eq!(self.ty, unsafe { ty.assume_init() });
         // SAFETY: it is safe to assume that `type` has been initialized because:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] PropertyType`
         // > A pointer to a DEVPROPTYPE-typed variable that receives the property-data-type identifier
         // > of the requested device interface property
@@ -379,7 +379,7 @@ impl Property<'_> {
         assert_eq!(self.size, unsafe { size.assume_init() });
 
         // SAFETY:
-        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#paramters
+        // https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupdigetdeviceinterfacepropertyw#parameters
         // > `[out] PropertyBuffer`
         // > A pointer to a buffer that receives the requested device interface property.
         // > `SetupDiGetDeviceInterfaceProperty` retrieves the requested property only if the buffer is large enough
