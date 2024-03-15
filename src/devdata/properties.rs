@@ -1,7 +1,7 @@
 use utf16string::WString;
-use winapi::shared::devpropdef::{DEVPROPKEY, DEVPROPTYPE, DEVPROP_BOOLEAN, DEVPROP_TRUE};
-use winapi::shared::minwindef::{DWORD, FALSE, TRUE};
-use winapi::um::setupapi::SetupDiGetDeviceInterfacePropertyW;
+use windows_sys::Win32::Devices::DeviceAndDriverInstallation::SetupDiGetDeviceInterfacePropertyW;
+use windows_sys::Win32::Devices::Properties::{DEVPROPKEY, DEVPROPTYPE, DEVPROP_TRUE, DEVPROP_BOOLEAN};
+use windows_sys::Win32::Foundation::{FALSE, TRUE};
 
 use core::mem::{align_of, size_of, MaybeUninit};
 use core::ptr::null_mut;
@@ -9,7 +9,7 @@ use core::ptr::null_mut;
 use crate::{devprop::DevProperty, win};
 
 mod consts {
-    use winapi::shared::devpropdef::*;
+    use windows_sys::Win32::Devices::Properties::*;
 
     pub const EMPTY: DEVPROPTYPE = DEVPROP_TYPE_EMPTY;
     pub const NULL: DEVPROPTYPE = DEVPROP_TYPE_NULL;
@@ -191,7 +191,7 @@ impl super::DevInterfaceData<'_> {
         // - `[out] PropertyType` is a valid pointer to an uninitialized `DEVPROPTYPE`
         // - `PropertyBuffer` can be null if `PropertyBufferSize` is 0
         // - `PropertyBufferSize` must be 0 if `PropertyBuffer` is null
-        // - `[out] RequiredSize` is a valid pointer to an uninitialized `DWORD`
+        // - `[out] RequiredSize` is a valid pointer to an uninitialized `u32`
         // - `Flags` must be 0
         let result = unsafe {
             SetupDiGetDeviceInterfacePropertyW(
@@ -250,7 +250,7 @@ pub struct Property<'a> {
     /// Type of the value of the property
     ty: DEVPROPTYPE,
     /// Size in bytes of the value of the property
-    size: DWORD,
+    size: u32,
 }
 
 impl Property<'_> {
@@ -279,7 +279,7 @@ impl Property<'_> {
         // - `[out] PropertyType` is a valid pointer to an uninitialized `DEVPROPTYPE`
         // - `PropertyBuffer` is a pointer to an array of at least `PropertyBufferSize` size
         // - `PropertyBufferSize` plain data, any value allowed
-        // - `[out] RequiredSize` is a valid pointer to an uninitialized `DWORD`
+        // - `[out] RequiredSize` is a valid pointer to an uninitialized `u32`
         // - `Flags` must be 0
         let result = unsafe {
             SetupDiGetDeviceInterfacePropertyW(
@@ -344,7 +344,7 @@ impl Property<'_> {
         // - `[out] PropertyType` is a valid pointer to an uninitialized `DEVPROPTYPE`
         // - `PropertyBuffer` is a pointer to an array of at least `PropertyBufferSize` size
         // - `PropertyBufferSize` plain data, any value allowed
-        // - `[out] RequiredSize` is a valid pointer to an uninitialized `DWORD`
+        // - `[out] RequiredSize` is a valid pointer to an uninitialized `u32`
         // - `Flags` must be 0
         let result = unsafe {
             SetupDiGetDeviceInterfacePropertyW(

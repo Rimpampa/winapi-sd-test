@@ -1,8 +1,11 @@
-use core::marker::PhantomData;
-use core::ptr::{null, null_mut};
+use core::{marker::PhantomData, ptr::null};
 
-use winapi::shared::{guiddef::*, minwindef::DWORD};
-use winapi::um::{handleapi::*, setupapi::*};
+use windows_sys::core::GUID;
+use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
+    SetupDiDestroyDeviceInfoList, SetupDiGetClassDevsW, DIGCF_ALLCLASSES, DIGCF_DEVICEINTERFACE,
+    DIGCF_PRESENT, HDEVINFO,
+};
+use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 
 use crate::{devdata::DevInterfaceData, win};
 
@@ -14,14 +17,14 @@ pub struct DevInterfaceSet {
 }
 
 impl DevInterfaceSet {
-    fn fetch_all(additional_flags: DWORD) -> win::Result<Self> {
+    fn fetch_all(additional_flags: u32) -> win::Result<Self> {
         // SAFETY: NULL is allowed for all the parameters
         // https://docs.microsoft.com/en-gb/windows/win32/api/setupapi/nf-setupapi-setupdigetclassdevsw?redirectedfrom=MSDN#parameters
         let handle = unsafe {
             SetupDiGetClassDevsW(
                 null(),
                 null(),
-                null_mut(),
+                0,
                 DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE | additional_flags,
             )
         };

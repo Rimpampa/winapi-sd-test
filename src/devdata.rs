@@ -4,18 +4,21 @@ use core::num::NonZeroUsize;
 use core::ptr::{addr_of_mut, null_mut};
 
 use utf16string::LittleEndian;
-
-use winapi::shared::devpropdef::*;
-use winapi::shared::guiddef::*;
-use winapi::shared::minwindef::{DWORD, FALSE, TRUE};
-use winapi::um::setupapi::*;
+use windows_sys::core::GUID;
+use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
+    SetupDiEnumDeviceInterfaces, SetupDiGetDeviceInterfaceDetailW,
+    SetupDiGetDeviceInterfacePropertyKeys, HDEVINFO, SPINT_ACTIVE, SPINT_DEFAULT, SPINT_REMOVED,
+    SP_DEVICE_INTERFACE_DATA, SP_DEVICE_INTERFACE_DETAIL_DATA_W,
+};
+use windows_sys::Win32::Devices::Properties::DEVPROPKEY;
+use windows_sys::Win32::Foundation::{FALSE, TRUE};
 
 use crate::devset::DevInterfaceSet;
 use crate::win;
 
 mod properties;
 
-/// A wrapper around the [`SP_DEVICE_INTERFACE_DATA`] struct from the [`winapi`]
+/// A wrapper around the [`SP_DEVICE_INTERFACE_DATA`] struct from [`windows_sys`]
 ///
 /// # Invariants
 ///
@@ -87,7 +90,7 @@ impl<'a> DevInterfaceData<'a> {
 
     /// Checks if the [`SP_DEVICE_INTERFACE_DATA::flags`](SP_DEVICE_INTERFACE_DATA) contains
     /// the given flag (or flags)
-    fn is(&self, flag: DWORD) -> bool {
+    fn is(&self, flag: u32) -> bool {
         (self.data.Flags & flag) == flag
     }
 
@@ -114,7 +117,7 @@ impl<'a> DevInterfaceData<'a> {
     /// This path can be used in the windows API functions to refer to this device
     pub fn fetch_path(&self) -> win::Result<utf16string::WString<LittleEndian>> {
         use SP_DEVICE_INTERFACE_DETAIL_DATA_W as Data;
-        const SIZE: DWORD = size_of::<Data>() as DWORD;
+        const SIZE: u32 = size_of::<Data>() as u32;
 
         let mut size = MaybeUninit::uninit();
 
@@ -126,7 +129,7 @@ impl<'a> DevInterfaceData<'a> {
         //   > This parameter must be NULL if `DeviceInterfaceDetailSize` is zero
         // - `DeviceInterfaceDetailDataSize` can be 0
         //   > This parameter must be zero if `DeviceInterfaceDetailData` is NULL
-        // - `[out] RequiredSize` is a valid pointer to an (uninitialized) mutable DWORD
+        // - `[out] RequiredSize` is a valid pointer to an (uninitialized) mutable u32
         // - `[optional] DeviceInfoData` can be null
         let result = unsafe {
             SetupDiGetDeviceInterfaceDetailW(
@@ -229,7 +232,7 @@ impl<'a> DevInterfaceData<'a> {
         // - `[optional] PropertyKeyArray` can be null
         // - `DeviceInterfaceDetailDataSize` must be 0
         //   > If `PropertyKeyArray` is NULL, PropertyKeyCount must be set to zero.
-        // - `[out] RequiredPropertyKeyCount` is a valid pointer to an (uninitialized) mutable DWORD
+        // - `[out] RequiredPropertyKeyCount` is a valid pointer to an (uninitialized) mutable u32
         // - `Flags` must be 0
         let result = unsafe {
             SetupDiGetDeviceInterfacePropertyKeys(

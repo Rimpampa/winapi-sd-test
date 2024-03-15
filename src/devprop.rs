@@ -1,6 +1,6 @@
 use core::fmt::*;
 use utf16string::LittleEndian;
-use winapi::shared::{devpropdef::DEVPROPTYPE, guiddef::GUID};
+use windows_sys::{core::GUID, Win32::Devices::Properties::DEVPROPTYPE};
 
 pub enum DevProperty {
     Empty,
@@ -124,10 +124,10 @@ pub mod fmt {
     impl Debug for Guid<'_> {
         fn fmt(&self, f: &mut Formatter<'_>) -> Result {
             f.debug_struct("Guid")
-                .field("Data1", &self.0.Data1)
-                .field("Data2", &self.0.Data2)
-                .field("Data3", &self.0.Data3)
-                .field("Data4", &self.0.Data4)
+                .field("data1", &self.0.data1)
+                .field("data2", &self.0.data2)
+                .field("data3", &self.0.data3)
+                .field("data4", &self.0.data4)
                 .finish()
         }
     }
@@ -135,10 +135,10 @@ pub mod fmt {
     impl Display for Guid<'_> {
         fn fmt(&self, fmt: &mut Formatter<'_>) -> Result {
             let GUID {
-                Data1: a,
-                Data2: b,
-                Data3: c,
-                Data4: [d, e, f, g, h, i, j, k],
+                data1: a,
+                data2: b,
+                data3: c,
+                data4: [d, e, f, g, h, i, j, k],
             } = self.0;
             write!(
                 fmt,
@@ -158,7 +158,9 @@ pub mod fmt {
 
     impl Display for GuidSlice<'_> {
         fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-            let Some((first, rest)) = self.0.split_first() else { return write!(f, "[]") };
+            let Some((first, rest)) = self.0.split_first() else {
+                return write!(f, "[]");
+            };
 
             let start = if f.alternate() { "[\n    " } else { "[" };
             write!(f, "{start}{}", Guid(first))?;

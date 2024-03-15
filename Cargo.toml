@@ -6,6 +6,11 @@ edition = "2021"
 [dependencies]
 utf16string = "0.2.0"
 
-[dependencies.winapi]
-version = "0.3.9"
-features = ["setupapi", "handleapi", "errhandlingapi", "winerror", "winioctl", "devpkey"]
+[dependencies.windows-sys]
+version = "0.52"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Ioctl",
+    "Win32_Devices_Properties",
+    "Win32_Devices_DeviceAndDriverInstallation",
+]

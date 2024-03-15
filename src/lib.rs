@@ -57,12 +57,14 @@ fn alloc_slice_with_align(size: NonZeroUsize, align: usize) -> Box<[MaybeUninit<
     unsafe { Box::from_raw(slice) }
 }
 
-/// Converts the [`BOOL`](winapi::shared::minwindef::BOOL)s contained in the
-/// [`Box`]ed slice into Rust [`bool`]s without creating a new allocation
+use windows_sys::Win32::Devices::Properties::DEVPROP_BOOLEAN;
+
+/// Converts the [`DEVPROP_BOOLEAN`]s contained in the [`Box`]ed slice into Rust [`bool`]s
+/// without creating a new allocation
 // NOTE:
 // this can be written in safe rust by simply doing v.into_iter().map(|v| v & 1).collect()
 // but this version, even though it uses unsafe, gets optimized even with opt-level=1
-fn winbools_to_bools(mut v: Box<[winapi::shared::devpropdef::DEVPROP_BOOLEAN]>) -> Box<[bool]> {
+fn winbools_to_bools(mut v: Box<[DEVPROP_BOOLEAN]>) -> Box<[bool]> {
     v.iter_mut().for_each(|v| *v &= 1);
     // SAFETY:
     // The values are now guaranteed to be valid bools (& 1 restricts the value
